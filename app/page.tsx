@@ -50,6 +50,7 @@ const menu = [
   { id: 9, name: 'Kola', price: 3 },
   { id: 10, name: 'Fanta', price: 3 },
   { id: 11, name: 'Su', price: 2 },
+  { id: 12, name: 'Dondurma', price: 2 },
 ];
 
 export default function Home() {
