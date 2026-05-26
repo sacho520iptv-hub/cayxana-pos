@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   Coffee,
   X,
   Trash2,
   Plus,
   Minus,
+  Search,
+  MoveRight,
+  History,
+  LayoutGrid
 } from 'lucide-react';
 
 interface OrderItem {
@@ -18,397 +22,388 @@ interface OrderItem {
 
 interface Stol {
   id: number;
-  status: 'empty' | 'occupied' | 'waiting';
+  status: 'empty' | 'occupied';
   orders: OrderItem[];
   ofisiant: string;
 }
 
-const ofisiantlar = ['Akif', 'Elvin', 'Vüsal', 'Rəşad'];
+interface SaleRecord {
+  time: string;
+  stolId: number;
+  total: number;
+  ofisiant: string;
+}
+
+const ofisiantlar = ['Abbas', 'Elvin', 'Vüsal', 'Rəşad'];
 
 const menu = [
   { id: 1, name: 'Sadə Çay', price: 2 },
-  { id: 2, name: 'Mürəbbəli Çay', price: 4 },
-  { id: 3, name: 'Şokoladlı Çay', price: 3.5 },
-  { id: 4, name: 'Tək Pivə', price: 6 },
-  { id: 5, name: 'Noxud', price: 5 },
-  { id: 6, name: 'Saçaq Pendir', price: 7 },
-  { id: 7, name: 'Sadə Qalyan', price: 15 },
-  { id: 8, name: 'Premium Qalyan', price: 25 },
+  { id: 2, name: 'Mürəbbəli Çay', price: 5 },
+  { id: 3, name: 'Şokoladlı Çay', price: 5 },
+  { id: 4, name: 'Tək Pivə', price: 2 },
+  { id: 5, name: 'Noxud', price: 2 },
+  { id: 6, name: 'Saçaq Pendir', price: 3 },
+  { id: 7, name: 'Sadə Qalyan', price: 10 },
+  { id: 8, name: 'Premium Qalyan', price: 15 },
   { id: 9, name: 'Kola', price: 3 },
+  { id: 10, name: 'Fanta', price: 3 },
+  { id: 11, name: 'Su', price: 2 },
 ];
 
 export default function Home() {
   const [stollar, setStollar] = useState<Stol[]>([]);
   const [selectedStol, setSelectedStol] = useState<Stol | null>(null);
   const [nextId, setNextId] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [history, setHistory] = useState<SaleRecord[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
+  // Load Data
   useEffect(() => {
-    const saved = localStorage.getItem('cayxana-pos');
+    const savedStollar = localStorage.getItem('cayxana-stollar');
+    const savedHistory = localStorage.getItem('cayxana-history');
 
-    if (saved) {
-      setStollar(JSON.parse(saved));
+    if (savedStollar) {
+      setStollar(JSON.parse(savedStollar));
     } else {
-      const initialStollar = Array.from({ length: 20 }, (_, i) => ({
+      const initialStollar = Array.from({ length: 24 }, (_, i) => ({
         id: i + 1,
-        status: 'empty' as 'empty' | 'occupied' | 'waiting',
+        status: 'empty' as const,
         orders: [],
-        ofisiant: 'Akif',
+        ofisiant: ofisiantlar[0],
       }));
-
       setStollar(initialStollar);
+    }
+
+    if (savedHistory) {
+      setHistory(JSON.parse(savedHistory));
     }
   }, []);
 
+  // Save Data
   useEffect(() => {
     if (stollar.length > 0) {
-      localStorage.setItem('cayxana-pos', JSON.stringify(stollar));
+      localStorage.setItem('cayxana-stollar', JSON.stringify(stollar));
     }
-  }, [stollar]);
+    localStorage.setItem('cayxana-history', JSON.stringify(history));
+  }, [stollar, history]);
+
+  const filteredMenu = useMemo(() => {
+    return menu.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [searchTerm]);
 
   const openStol = (stol: Stol) => {
     setSelectedStol(stol);
-
-    const maxId =
-      stol.orders.length > 0
-        ? Math.max(...stol.orders.map((o) => o.uniqueId))
-        : 0;
-
+    const maxId = stol.orders.length > 0 ? Math.max(...stol.orders.map((o) => o.uniqueId)) : 0;
     setNextId(maxId + 1);
   };
 
-  const closeModal = () => {
-    setSelectedStol(null);
-  };
-
   const updateStol = (updatedStol: Stol) => {
-    setStollar((prev) =>
-      prev.map((s) => (s.id === updatedStol.id ? updatedStol : s))
-    );
-
+    setStollar(prev => prev.map(s => s.id === updatedStol.id ? updatedStol : s));
     setSelectedStol(updatedStol);
   };
 
   const addToOrder = (product: any) => {
     if (!selectedStol) return;
-
-    const existing = selectedStol.orders.find(
-      (o) => o.name === product.name
-    );
-
-    let updatedOrders: OrderItem[] = [];
+    const existing = selectedStol.orders.find(o => o.name === product.name);
+    let updatedOrders;
 
     if (existing) {
-      updatedOrders = selectedStol.orders.map((item) =>
-        item.name === product.name
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
+      updatedOrders = selectedStol.orders.map(item =>
+        item.name === product.name ? { ...item, quantity: item.quantity + 1 } : item
       );
     } else {
-      updatedOrders = [
-        ...selectedStol.orders,
-        {
-          uniqueId: nextId,
-          name: product.name,
-          price: product.price,
-          quantity: 1,
-        },
-      ];
-
+      updatedOrders = [...selectedStol.orders, { uniqueId: nextId, name: product.name, price: product.price, quantity: 1 }];
       setNextId(nextId + 1);
     }
 
-    updateStol({
-      ...selectedStol,
-      status: 'occupied',
-      orders: updatedOrders,
-    });
+    updateStol({ ...selectedStol, status: 'occupied', orders: updatedOrders });
   };
 
-  const increaseQuantity = (uniqueId: number) => {
+  const changeQuantity = (uniqueId: number, delta: number) => {
     if (!selectedStol) return;
-
-    const updatedOrders = selectedStol.orders.map((item) =>
-      item.uniqueId === uniqueId
-        ? { ...item, quantity: item.quantity + 1 }
-        : item
-    );
+    const updatedOrders = selectedStol.orders.map(item =>
+      item.uniqueId === uniqueId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    ).filter(item => item.quantity > 0);
 
     updateStol({
       ...selectedStol,
       orders: updatedOrders,
+      status: updatedOrders.length === 0 ? 'empty' : 'occupied'
     });
   };
 
-  const decreaseQuantity = (uniqueId: number) => {
-    if (!selectedStol) return;
-
-    const updatedOrders = selectedStol.orders
-      .map((item) =>
-        item.uniqueId === uniqueId
-          ? { ...item, quantity: item.quantity - 1 }
-          : item
-      )
-      .filter((item) => item.quantity > 0);
-
-    updateStol({
-      ...selectedStol,
-      orders: updatedOrders,
-      status:
-        updatedOrders.length === 0 ? 'empty' : selectedStol.status,
-    });
-  };
-
-  const removeItem = (uniqueId: number) => {
-    if (!selectedStol) return;
-
-    const updatedOrders = selectedStol.orders.filter(
-      (item) => item.uniqueId !== uniqueId
-    );
-
-    updateStol({
-      ...selectedStol,
-      orders: updatedOrders,
-      status:
-        updatedOrders.length === 0 ? 'empty' : selectedStol.status,
-    });
-  };
-
-  const calculateTotal = () => {
-    if (!selectedStol) return 0;
-
-    return selectedStol.orders.reduce((sum, item) => {
+  const calculateTotal = (stol: Stol) => {
+    return stol.orders.reduce((sum, item) => {
+      // Xüsusi məntiq: Sadə Çay - İlk çay 2 AZN, sonrakılar 1 AZN
       if (item.name === 'Sadə Çay') {
-        if (item.quantity === 1) {
-          return sum + 2;
-        }
-
         return sum + 2 + (item.quantity - 1) * 1;
       }
-
-      return sum + item.price * item.quantity;
+      return sum + (item.price * item.quantity);
     }, 0);
   };
 
   const closeOrder = () => {
-    if (!selectedStol) return;
+    if (!selectedStol || selectedStol.orders.length === 0) return;
 
-    if (selectedStol.orders.length === 0) {
-      alert('Heç bir sifariş yoxdur!');
+    const total = calculateTotal(selectedStol);
+    const newRecord: SaleRecord = {
+      time: new Date().toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' }),
+      stolId: selectedStol.id,
+      total: total,
+      ofisiant: selectedStol.ofisiant
+    };
+
+    setHistory([newRecord, ...history]);
+    updateStol({ ...selectedStol, status: 'empty', orders: [] });
+    setSelectedStol(null);
+  };
+
+  const transferStol = (targetId: number) => {
+    if (!selectedStol || selectedStol.id === targetId) return;
+    const targetStol = stollar.find(s => s.id === targetId);
+    if (!targetStol || targetStol.orders.length > 0) {
+      alert("Hədəf stol dolu ola bilməz!");
       return;
     }
 
-    const total = calculateTotal();
-
-    alert(`
-✅ Hesab bağlandı
-
-Stol: #${selectedStol.id}
-Ofisiant: ${selectedStol.ofisiant}
-Məbləğ: ${total.toFixed(1)} AZN
-    `);
-
-    updateStol({
-      ...selectedStol,
-      status: 'empty',
-      orders: [],
+    const updatedStollar = stollar.map(s => {
+      if (s.id === selectedStol.id) return { ...s, status: 'empty', orders: [], ofisiant: ofisiantlar[0] };
+      if (s.id === targetId) return { ...s, status: 'occupied', orders: selectedStol.orders, ofisiant: selectedStol.ofisiant };
+      return s;
     });
 
-    closeModal();
+    setStollar(updatedStollar as Stol[]);
+    setSelectedStol(null);
   };
 
+  const dailyTotal = history.reduce((sum, item) => sum + item.total, 0);
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="sticky top-0 z-50 bg-black border-b border-gray-800 py-5">
-        <div className="max-w-7xl mx-auto px-6 flex items-center gap-4">
-          <Coffee className="text-orange-500" size={48} />
-
-          <div>
-            <h1 className="text-4xl font-bold">
-              Qardaş Çay Evi
-            </h1>
-
-            <p className="text-gray-400">
-              Professional POS Sistemi
-            </p>
+    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 font-sans">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-orange-500 p-2 rounded-xl">
+              <Coffee className="text-white" size={28} />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">ABİDƏLƏR PARKI ÇAY EVİ</h1>
+              <p className="text-xs text-zinc-500 uppercase tracking-widest">Admin Panel</p>
+            </div>
           </div>
+          
+          <button 
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-lg transition-colors"
+          >
+            <History size={20} />
+            <span className="hidden sm:inline">Hesabat</span>
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <h2 className="text-3xl font-semibold mb-8">
-          📍 Stollar
-        </h2>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-5">
-          {stollar.map((stol) => (
-            <div
-              key={stol.id}
-              onClick={() => openStol(stol)}
-              className="aspect-square rounded-3xl p-5 cursor-pointer bg-zinc-900 hover:bg-zinc-800 border-2 border-gray-700 hover:border-orange-500 transition-all"
-            >
-              <div className="flex flex-col justify-between h-full">
-                <div className="text-4xl font-bold">
-                  #{stol.id}
-                </div>
-
-                <div className="text-center text-lg">
-                  {stol.status === 'empty'
-                    ? '🟢 Boş'
-                    : stol.status === 'occupied'
-                    ? '🔴 Dolu'
-                    : '🟡 Gözləyir'}
-                </div>
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {showHistory ? (
+          <section className="animate-in fade-in duration-300">
+            <div className="flex justify-between items-end mb-6">
+              <h2 className="text-2xl font-bold">Gündəlik Satış</h2>
+              <div className="text-right">
+                <p className="text-zinc-400 text-sm">Ümumi Kassa</p>
+                <p className="text-3xl font-black text-green-500">{dailyTotal.toFixed(2)} AZN</p>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800">
+              <table className="w-full text-left">
+                <thead className="bg-zinc-800 text-zinc-400 text-sm">
+                  <tr>
+                    <th className="p-4">Saat</th>
+                    <th className="p-4">Stol</th>
+                    <th className="p-4">Ofisiant</th>
+                    <th className="p-4 text-right">Məbləğ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {history.map((sale, i) => (
+                    <tr key={i} className="hover:bg-zinc-800/50">
+                      <td className="p-4">{sale.time}</td>
+                      <td className="p-4">Stol #{sale.stolId}</td>
+                      <td className="p-4">{sale.ofisiant}</td>
+                      <td className="p-4 text-right font-bold text-orange-400">{sale.total.toFixed(2)} AZN</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {history.length === 0 && <p className="p-10 text-center text-zinc-500">Bu gün hələ satış edilməyib.</p>}
+            </div>
+          </section>
+        ) : (
+          <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {stollar.map((stol) => (
+              <button
+                key={stol.id}
+                onClick={() => openStol(stol)}
+                className={`relative group aspect-square rounded-2xl p-4 transition-all duration-200 border-2 flex flex-col justify-between items-start
+                  ${stol.status === 'occupied' 
+                    ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' 
+                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-600'}`}
+              >
+                <span className={`text-2xl font-black ${stol.status === 'occupied' ? 'text-orange-500' : 'text-zinc-600'}`}>
+                  {stol.id.toString().padStart(2, '0')}
+                </span>
+                
+                <div className="w-full">
+                  {stol.status === 'occupied' ? (
+                    <div className="text-left">
+                      <p className="text-[10px] uppercase text-orange-400 font-bold">Məbləğ</p>
+                      <p className="text-lg font-bold">{calculateTotal(stol).toFixed(1)} ₼</p>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-zinc-500 font-medium">BOŞ STOL</span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </section>
+        )}
+      </main>
 
+      {/* Modal Sifariş */}
       {selectedStol && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 w-full max-w-6xl rounded-3xl max-h-[95vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-gray-700 flex justify-between items-center">
-              <h2 className="text-3xl font-bold">
-                Stol #{selectedStol.id}
-              </h2>
-
-              <button onClick={closeModal}>
-                <X size={36} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 animate-in fade-in zoom-in duration-200">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedStol(null)} />
+          
+          <div className="relative bg-zinc-900 w-full max-w-5xl h-full sm:h-[85vh] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+              <div className="flex items-center gap-4">
+                <h2 className="text-2xl font-bold">Stol #{selectedStol.id}</h2>
+                <select
+                  value={selectedStol.ofisiant}
+                  onChange={(e) => updateStol({ ...selectedStol, ofisiant: e.target.value })}
+                  className="bg-zinc-800 text-sm rounded-lg px-3 py-1 border border-zinc-700 outline-none"
+                >
+                  {ofisiantlar.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <button onClick={() => setSelectedStol(null)} className="p-2 hover:bg-zinc-800 rounded-full">
+                <X size={24} />
               </button>
             </div>
 
-            <div className="p-6 border-b border-gray-700">
-              <label className="block mb-2 text-gray-400">
-                Ofisiant
-              </label>
-
-              <select
-                value={selectedStol.ofisiant}
-                onChange={(e) =>
-                  updateStol({
-                    ...selectedStol,
-                    ofisiant: e.target.value,
-                  })
-                }
-                className="bg-zinc-800 w-full rounded-2xl px-4 py-3"
-              >
-                {ofisiantlar.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-1 overflow-hidden">
-              <div className="w-2/3 p-6 border-r border-gray-700 overflow-auto">
-                <h3 className="text-2xl font-semibold mb-5">
-                  Menyu
-                </h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {menu.map((product) => (
-                    <div
+            <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
+              {/* Sol: Menyu */}
+              <div className="flex-1 p-4 flex flex-col gap-4 border-r border-zinc-800 overflow-hidden">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Məhsul axtar..."
+                    className="w-full bg-zinc-800 rounded-xl py-3 pl-10 pr-4 outline-none border border-zinc-700 focus:border-orange-500 transition-colors"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto pr-2 custom-scrollbar">
+                  {filteredMenu.map(product => (
+                    <button
                       key={product.id}
                       onClick={() => addToOrder(product)}
-                      className="bg-zinc-800 hover:bg-zinc-700 p-5 rounded-2xl cursor-pointer active:scale-95 transition-all"
+                      className="bg-zinc-800 hover:bg-orange-600 p-4 rounded-xl text-left transition-all active:scale-95 group"
                     >
-                      <p className="font-semibold text-lg">
-                        {product.name}
-                      </p>
-
-                      <p className="text-orange-400 mt-2">
-                        {product.id === 1
-                          ? 'İlk 2 AZN | Sonrakı 1 AZN'
-                          : `${product.price} AZN`}
-                      </p>
-                    </div>
+                      <p className="font-semibold text-sm group-hover:text-white">{product.name}</p>
+                      <p className="text-orange-400 text-xs mt-1 group-hover:text-orange-100">{product.price} AZN</p>
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <div className="w-1/3 p-6 flex flex-col">
-                <h3 className="text-2xl font-semibold mb-5">
-                  Cari Sifariş
-                </h3>
-
-                <div className="flex-1 overflow-auto space-y-3">
-                  {selectedStol.orders.length === 0 ? (
-                    <p className="text-gray-500 text-center mt-10">
-                      Məhsul əlavə edin
-                    </p>
-                  ) : (
-                    selectedStol.orders.map((item) => (
-                      <div
-                        key={item.uniqueId}
-                        className="bg-zinc-800 p-4 rounded-2xl flex justify-between items-center"
-                      >
-                        <div>
-                          <p className="font-semibold">
-                            {item.name}
-                          </p>
-
-                          <p className="text-orange-400">
-                            {item.price} AZN
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() =>
-                              decreaseQuantity(item.uniqueId)
-                            }
-                            className="bg-zinc-700 hover:bg-zinc-600 w-8 h-8 rounded-lg flex items-center justify-center"
-                          >
-                            <Minus size={16} />
-                          </button>
-
-                          <span className="w-6 text-center">
-                            {item.quantity}
-                          </span>
-
-                          <button
-                            onClick={() =>
-                              increaseQuantity(item.uniqueId)
-                            }
-                            className="bg-zinc-700 hover:bg-zinc-600 w-8 h-8 rounded-lg flex items-center justify-center"
-                          >
-                            <Plus size={16} />
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              removeItem(item.uniqueId)
-                            }
-                            className="text-red-500 ml-2"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
+              {/* Sağ: Sifariş siyahısı */}
+              <div className="w-full lg:w-80 bg-zinc-950/50 p-4 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <LayoutGrid size={18} /> Sifarişlər
+                  </h3>
+                  <span className="bg-orange-500 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    {selectedStol.orders.length} Məhsul
+                  </span>
                 </div>
 
-                <div className="border-t border-gray-700 pt-6 mt-6">
-                  <div className="flex justify-between text-3xl font-bold mb-6">
-                    <span>Cəmi:</span>
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                  {selectedStol.orders.map(item => (
+                    <div key={item.uniqueId} className="bg-zinc-900 p-3 rounded-xl border border-zinc-800">
+                      <div className="flex justify-between items-start mb-2">
+                        <p className="text-sm font-medium">{item.name}</p>
+                        <button onClick={() => changeQuantity(item.uniqueId, -item.quantity)} className="text-zinc-500 hover:text-red-500">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-orange-500 font-bold text-sm">{(item.price * item.quantity).toFixed(1)} ₼</p>
+                        <div className="flex items-center gap-3 bg-zinc-800 rounded-lg p-1">
+                          <button onClick={() => changeQuantity(item.uniqueId, -1)} className="w-6 h-6 flex items-center justify-center hover:bg-zinc-700 rounded">-</button>
+                          <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
+                          <button onClick={() => changeQuantity(item.uniqueId, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-zinc-700 rounded">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                    <span className="text-orange-400">
-                      {calculateTotal().toFixed(1)} AZN
-                    </span>
+                {/* Footer Hesab */}
+                <div className="mt-4 pt-4 border-t border-zinc-800 space-y-3">
+                  <div className="flex justify-between text-xl font-black">
+                    <span>CƏMİ:</span>
+                    <span className="text-orange-500">{calculateTotal(selectedStol).toFixed(1)} AZN</span>
                   </div>
-
-                  <button
-                    onClick={closeOrder}
-                    className="w-full bg-green-600 hover:bg-green-700 py-4 rounded-2xl text-lg font-semibold transition-all"
-                  >
-                    Hesabı Bağla
-                  </button>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={closeOrder}
+                      disabled={selectedStol.orders.length === 0}
+                      className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:hover:bg-green-600 py-3 rounded-xl font-bold transition-colors"
+                    >
+                      HESABI BAĞLA
+                    </button>
+                    <div className="relative group">
+                      <button className="w-full bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2">
+                        <MoveRight size={18} /> KÖÇÜR
+                      </button>
+                      {/* Köçürmə Dropdown (Sadələşdirilmiş) */}
+                      <div className="absolute bottom-full right-0 mb-2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl hidden group-hover:grid grid-cols-4 gap-1 p-2 max-h-40 overflow-y-auto">
+                        {stollar.filter(s => s.status === 'empty').map(s => (
+                          <button 
+                            key={s.id} 
+                            onClick={() => transferStol(s.id)}
+                            className="p-2 text-xs hover:bg-orange-500 rounded"
+                          >
+                            {s.id}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #3f3f46;
+          border-radius: 10px;
+        }
+      `}</style>
     </div>
   );
 }
